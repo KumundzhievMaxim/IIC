@@ -1,9 +1,12 @@
+import io
+import os
 import sys
 from datetime import datetime
 
 import torch
 import torchvision
 from torch.utils.data import ConcatDataset
+from torch.utils.data import dataloader, Dataset
 
 from code.datasets.clustering.truncated_dataset import TruncatedDataset
 from code.utils.cluster.transforms import sobel_make_transforms, \
@@ -13,6 +16,36 @@ from .general import reorder_train_deterministic
 
 
 # Used by sobel and greyscale clustering twohead scripts -----------------------
+class SampleDataset(Dataset):
+    """Create Sampling datasets.
+    """
+
+    def __init__(self, root_dir, transform=None):
+        """
+        Args:
+            root_dir (str): path to folder with images;
+            transform: applied transformations for images. For test case;
+        """
+        self.root_dir = root_dir
+        self.transform = transform
+        self.image_names = [name.split('/')[-1] for name in os.listdir(root_dir)]
+
+    def __len__(self):
+        return len(os.listdir(self.root_dir))
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.to_list()
+
+        image_path = os.path.join(self.root_dir,
+                                  self.image_names[idx])
+        image = io.imread(image_path)
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image
+
 
 def cluster_twohead_create_dataloaders(config):
   assert (config.mode == "IID")
@@ -98,6 +131,49 @@ def cluster_twohead_create_dataloaders(config):
 
   return dataloaders_head_A, dataloaders_head_B, \
          mapping_assignment_dataloader, mapping_test_dataloader
+
+# Used to apply custom data for 4 + 1 heads -------------------
+
+def load_dataloaders(config):
+    assert (config.mode == "IID")
+    assert (config.twohead)
+
+    target_transform = None
+    tf1, tf2, tf3 = greyscale_make_transforms(config)
+
+    config.train_partitions_head_A = [True, False]
+    config.train_partitions_head_B = config.train_partitions_head_A
+
+    config.mapping_assignment_partitions = [True, False]
+    config.mapping_test_partitions = [True, False]
+
+    dataset_class = SampleDataset(
+        root_dir='apply_root_data_path',
+        transform=None
+    )
+
+    dataloaders_head_A = \
+        _create_dataloaders(config, dataset_class, tf1, tf2,
+                             partitions=config.train_partitions_head_A,
+                             target_transform=target_transform)
+
+    dataloaders_head_B = \
+        _create_dataloaders(config, dataset_class, tf1, tf2,
+                             partitions=config.train_partitions_head_B,
+                             target_transform=target_transform)
+
+    mapping_assignment_dataloader = \
+        _create_mapping_loader(config, dataset_class, tf3,
+                                partitions=config.mapping_assignment_partitions,
+                                target_transform=target_transform)
+
+    mapping_test_dataloader = \
+        _create_mapping_loader(config, dataset_class, tf3,
+                                partitions=config.mapping_test_partitions,
+                                target_transform=target_transform)
+
+    return dataloaders_head_A, dataloaders_head_B, \
+           mapping_assignment_dataloader, mapping_test_dataloader
 
 
 # Used by sobel and greyscale clustering single head scripts -------------------

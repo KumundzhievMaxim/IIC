@@ -18,7 +18,7 @@ import code.archs as archs
 from code.utils.cluster.general import config_to_str, get_opt, update_lr, nice
 from code.utils.cluster.transforms import sobel_process
 from code.utils.cluster.cluster_eval import cluster_eval, get_subhead_using_loss
-from code.utils.cluster.data import cluster_twohead_create_dataloaders
+from code.utils.cluster.data import load_dataloaders
 from code.utils.cluster.IID_losses import IID_loss
 
 """
@@ -108,6 +108,28 @@ parser.add_argument("--cutout_max_box", type=float, default=0.5)
 
 config = parser.parse_args()
 
+
+# # Apply Namespace for check in executing
+#
+# config = argparse.Namespace(
+#     model_ind=1,
+#     arch='ClusterNet5gTwoHead',
+#     dataset='custom_dataset',
+#     dataset_root='_apply_data_directory',
+#     gt_k=10,
+#     output_k_A=70,
+#     output_k_B=10,
+#     out_root='_apply_output_directory',
+#     lamb=1.0,
+#     lr=0.0001,
+#     num_epochs=500,
+#     batch_sz=128,
+#     num_dataloaders=4,
+#     num_sub_heads=4,
+#     include_rgb=True
+# )
+
+
 # Setup ------------------------------------------------------------------------
 
 config.twohead = True
@@ -168,10 +190,12 @@ else:
 
 # Model ------------------------------------------------------------------------
 
-### Here change call to your own function, which would return 4 dataloaders:
+# dataloaders_head_A, dataloaders_head_B, mapping_assignment_dataloader, \
+# mapping_test_dataloader = cluster_twohead_create_dataloaders(config)
 
 dataloaders_head_A, dataloaders_head_B, mapping_assignment_dataloader, \
-mapping_test_dataloader = cluster_twohead_create_dataloaders(config)
+mapping_test_dataloader = load_dataloaders(config)
+
 
 net = archs.__dict__[config.arch](config)
 if config.restart:
